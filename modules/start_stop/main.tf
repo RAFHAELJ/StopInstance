@@ -4,21 +4,39 @@ data "aws_caller_identity" "current" {}
 ###### EVENT BRIDGE ######
 resource "aws_cloudwatch_event_rule" "stop_instances" {
   name                = "StopInstance"
-  description         = "Stop instances every 5 minutes"
-  schedule_expression = "rate(2 minutes)" # Alteração para executar a cada 5 minutos
+  description         = "Stop instances every day at midnight"
+  schedule_expression = "cron(0 0 * * ? *)" # Executar à meia-noite todos os dias
 }
 
-resource "aws_cloudwatch_event_target" "invoke_lambda" {
+resource "aws_cloudwatch_event_target" "invoke_lambda_stop" {
   depends_on = [aws_lambda_function.autotag]
   rule       = aws_cloudwatch_event_rule.stop_instances.name
-  target_id  = "InvokeLambda"
-
+  target_id  = "InvokeLambdaStop"
 
   arn = aws_lambda_function.autotag.arn
 
   input = jsonencode({
     "instances" : var.instances_ids,
     "action" : "Stop"
+  })
+}
+
+resource "aws_cloudwatch_event_rule" "start_instances" {
+  name                = "StartInstance"
+  description         = "Start instances every day at 6 AM"
+  schedule_expression = "cron(0 6 * * ? *)" # Executar às 6 da manhã todos os dias
+}
+
+resource "aws_cloudwatch_event_target" "invoke_lambda_start" {
+  depends_on = [aws_lambda_function.autotag]
+  rule       = aws_cloudwatch_event_rule.start_instances.name
+  target_id  = "InvokeLambdaStart"
+
+  arn = aws_lambda_function.autotag.arn
+
+  input = jsonencode({
+    "instances" : var.instances_ids,
+    "action" : "Start"
   })
 }
 
@@ -48,7 +66,9 @@ resource "aws_iam_role_policy" "eventbridge_invoke_policy" {
       {
         "Sid" : "AllowEventBridgeToInvokeLambda",
         "Action" : [
+          "lambda:InvokeAsync",
           "lambda:InvokeFunction"
+
         ],
         "Effect" : "Allow",
         "Resource" : aws_lambda_function.autotag.arn
@@ -62,21 +82,25 @@ resource "aws_iam_role_policy_attachment" "lambda_stop_instance_policy_attachmen
 
   depends_on = [aws_iam_role_policy.lambda_logs_policy]
 }
-resource "aws_iam_role_policy" "lambda_stop_instance_policy" {
-  name   = "LambdaStopInstancePolicy"
+resource "aws_iam_role_policy" "lambda_instance_actions_policy" {
+  name   = "LambdaInstanceActionsPolicy"
   role   = aws_iam_role.iam_for_lambda.id
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
       {
-        Sid       = "AllowStopInstance"
+        Sid       = "AllowStartStopInstance"
         Effect    = "Allow",
-        Action    = "ec2:StopInstances",
+        Action    = [
+          "ec2:StartInstances",
+          "ec2:StopInstances",
+        ],
         Resource  = "*"
       }
     ]
   })
 }
+
 
 resource "aws_iam_role" "iam_for_lambda" {
   name = "LambdaExecutionRole"

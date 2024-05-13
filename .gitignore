@@ -1,0 +1,14 @@
+# Arquivos temporários do Terraform
+.terraform/
+
+# Arquivos de estado do Terraform
+*.tfstate
+*.tfstate.*
+
+# Logs de erros do Terraform
+terraform.log
+
+# Arquivos de backup do VSCode
+.vscode/
+
+.terraform.lock.hcl
